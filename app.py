@@ -63,21 +63,37 @@ def run_genetic_algorithm(target_sum, n_attr, ngen, cxpb, mutpb, pop_size=50):
 
 @st.cache_data
 def run_cma_es(func_name, ngen_cma, sigma, num_individuals=10):
+    # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
     eval_func_cma, centroid_start = (benchmarks.rastrigin, [5.0]*num_individuals) if func_name == "Растригин" else (benchmarks.rosenbrock, [0.0]*num_individuals)
+    
     strategy = cma.Strategy(centroid=centroid_start, sigma=sigma, lambda_=20)
     toolbox_cma = base.Toolbox()
     toolbox_cma.register("evaluate", eval_func_cma)
+    
     hall_of_fame = tools.HallOfFame(1)
+    
+    # 1. Добавлен объект статистики для сбора данных по минимуму
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("min", np.min)
+    
     logbook_cma = tools.Logbook()
-    logbook_cma.header = strategy.fields
+    # 2. Исправлен способ задания заголовка
+    logbook_cma.header = ['gen', 'evals', 'min'] + strategy.getValues().keys()
+
     for gen in range(ngen_cma):
         population_cma = strategy.generate(creator.IndividualCMA)
         fitnesses = toolbox_cma.map(toolbox_cma.evaluate, population_cma)
-        for ind, fit in zip(population_cma, fitnesses): ind.fitness.values = fit
+        for ind, fit in zip(population_cma, fitnesses):
+            ind.fitness.values = fit
+        
         strategy.update(population_cma)
         hall_of_fame.update(population_cma)
-        logbook_cma.record(gen=gen, evals=len(population_cma), **strategy.getValues())
+        
+        record = stats.compile(population_cma)
+        logbook_cma.record(gen=gen, evals=len(population_cma), **record, **strategy.getValues())
+        
     return logbook_cma, hall_of_fame
+
 
 @st.cache_data
 def run_symbolic_regression(ngen, pop_size):
@@ -169,16 +185,17 @@ def render_chapter_2():
             fig, axes = plt.subplots(2, 2, figsize=(10, 8))
             fig.tight_layout(pad=3.0)
             
-            axes[0, 0].plot([f.values[0] for f in hall_of_fame.items])
+            # --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Используем logbook для построения графика ---
+            axes[0, 0].plot(logbook_cma.select('gen'), logbook_cma.select('min'))
             axes[0, 0].set_title("Лучшее значение функции"); axes[0, 0].grid(True)
             
-            axes[0, 1].plot(logbook_cma.select('sigma'))
+            axes[0, 1].plot(logbook_cma.select('gen'), logbook_cma.select('sigma'))
             axes[0, 1].set_title("Значение Sigma"); axes[0, 1].grid(True)
 
-            axes[1, 0].semilogy(logbook_cma.select('axis_ratio'))
+            axes[1, 0].semilogy(logbook_cma.select('gen'), logbook_cma.select('axis_ratio'))
             axes[1, 0].set_title("Соотношение осей"); axes[1, 0].grid(True)
             
-            axes[1, 1].semilogy([l['diagD'] for l in logbook_cma])
+            axes[1, 1].semilogy(logbook_cma.select('gen'), [l['diagD'] for l in logbook_cma])
             axes[1, 1].set_title("Диагональ D"); axes[1, 1].grid(True)
             
             st.pyplot(fig)
