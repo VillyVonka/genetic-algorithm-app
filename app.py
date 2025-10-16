@@ -154,9 +154,9 @@ def render_chapter_1():
         st.subheader("Результаты моделирования")
         best_individual, logbook = run_genetic_algorithm(target_sum, n_attr, ngen, cxpb, mutpb)
         fig, ax = plt.subplots(figsize=(10, 5))
-        ax.plot(logbook.select("gen"), logbook.select("max"), "b-", label="Максимальный фитнес")
-        ax.plot(logbook.select("gen"), logbook.select("avg"), "r-", label="Средний фитнес")
-        ax.set_xlabel("Поколение"); ax.set_ylabel("Фитнес"); ax.set_title("Динамика фитнеса")
+        ax.plot(logbook.select("gen"), logbook.select("max"), "b-", label="Максимальный fit")
+        ax.plot(logbook.select("gen"), logbook.select("avg"), "r-", label="Средний fit")
+        ax.set_xlabel("Поколение"); ax.set_ylabel("fit"); ax.set_title("Динамика fitа")
         ax.legend(loc="lower right"); ax.grid(True)
         st.pyplot(fig)
 
@@ -230,7 +230,7 @@ def render_chapter_4():
     st.markdown("Этот раздел демонстрирует концепцию, но не запускает полную симуляцию из-за высокой вычислительной нагрузки.")
     st.info("""
     **Концепция:** Генетическое программирование используется для эволюции программы управления роботом.
-    **Фитнес-функция:** Количество собранных "яблок" на 2D-карте за ограниченное число шагов.
+    **fit-функция:** Количество собранных "яблок" на 2D-карте за ограниченное число шагов.
     **Результат:** Ниже представлен пример оптимальной программы-контроллера, которая могла бы быть получена в результате такого процесса.
     """)
     st.subheader("Пример графа лучшего найденного алгоритма")
