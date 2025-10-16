@@ -17,21 +17,16 @@ st.set_page_config(
 )
 
 # --- ОПРЕДЕЛЕНИЕ ТИПОВ DEAP (делается один раз, чтобы избежать ошибок при перерисовке) ---
-# Для Части 1 (Генетический алгоритм)
 try:
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMax)
 except Exception:
     pass
-
-# Для Части 2 (CMA-ES)
 try:
     creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
     creator.create("IndividualCMA", list, fitness=creator.FitnessMin)
 except Exception:
     pass
-
-# Для Части 3 (Символическая регрессия)
 try:
     creator.create("FitnessMinGP", base.Fitness, weights=(-1.0,))
     creator.create("IndividualGP", gp.PrimitiveTree, fitness=creator.FitnessMinGP)
@@ -63,7 +58,6 @@ def run_genetic_algorithm(target_sum, n_attr, ngen, cxpb, mutpb, pop_size=50):
 
 @st.cache_data
 def run_cma_es(func_name, ngen_cma, sigma, num_individuals=10):
-    # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
     eval_func_cma, centroid_start = (benchmarks.rastrigin, [5.0]*num_individuals) if func_name == "Растригин" else (benchmarks.rosenbrock, [0.0]*num_individuals)
     
     strategy = cma.Strategy(centroid=centroid_start, sigma=sigma, lambda_=20)
@@ -71,14 +65,12 @@ def run_cma_es(func_name, ngen_cma, sigma, num_individuals=10):
     toolbox_cma.register("evaluate", eval_func_cma)
     
     hall_of_fame = tools.HallOfFame(1)
-    
-    # 1. Добавлен объект статистики для сбора данных по минимуму
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("min", np.min)
     
     logbook_cma = tools.Logbook()
-    # 2. Исправлен способ задания заголовка
-    logbook_cma.header = ['gen', 'evals', 'min'] + strategy.getValues().keys()
+    # --- ИСПРАВЛЕНИЕ 1: Заменяем .getValues().keys() на .values.keys() ---
+    logbook_cma.header = ['gen', 'evals', 'min'] + list(strategy.values.keys())
 
     for gen in range(ngen_cma):
         population_cma = strategy.generate(creator.IndividualCMA)
@@ -90,10 +82,10 @@ def run_cma_es(func_name, ngen_cma, sigma, num_individuals=10):
         hall_of_fame.update(population_cma)
         
         record = stats.compile(population_cma)
-        logbook_cma.record(gen=gen, evals=len(population_cma), **record, **strategy.getValues())
+        # --- ИСПРАВЛЕНИЕ 2: Заменяем **strategy.getValues() на **strategy.values ---
+        logbook_cma.record(gen=gen, evals=len(population_cma), **record, **strategy.values)
         
     return logbook_cma, hall_of_fame
-
 
 @st.cache_data
 def run_symbolic_regression(ngen, pop_size):
@@ -185,7 +177,6 @@ def render_chapter_2():
             fig, axes = plt.subplots(2, 2, figsize=(10, 8))
             fig.tight_layout(pad=3.0)
             
-            # --- ИСПРАВЛЕНИЕ ЗДЕСЬ: Используем logbook для построения графика ---
             axes[0, 0].plot(logbook_cma.select('gen'), logbook_cma.select('min'))
             axes[0, 0].set_title("Лучшее значение функции"); axes[0, 0].grid(True)
             
@@ -243,7 +234,6 @@ def render_chapter_4():
     **Результат:** Ниже представлен пример оптимальной программы-контроллера, которая могла бы быть получена в результате такого процесса.
     """)
     st.subheader("Пример графа лучшего найденного алгоритма")
-    # Статичный пример, так как реальный расчет слишком долгий для веб-приложения
     g = graphviz.Digraph()
     g.attr('node', shape='box')
     g.node("0", "if_food_ahead")
