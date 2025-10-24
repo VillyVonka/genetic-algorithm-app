@@ -116,7 +116,7 @@ def run_ga(pop_size, max_gen, cxpb, mutpb):
 
     population_history = []
     
-    def record_history(population, *args):
+    def record_history():
         population_history.append(population[:])
 
     # --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
