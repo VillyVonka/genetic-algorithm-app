@@ -1,16 +1,76 @@
 import streamlit as st
-from deap import base, algorithms
-from deap import creator
-from deap import tools
-import algelitism  # Наш кастомный алгоритм
+from deap import base, algorithms, creator, tools
+from deap.algorithms import varAnd  # Импорт, который был в algelitism.py
 import random
 import matplotlib.pyplot as plt
 import numpy as np
 import time
 
-# --- Константы и Настройка DEAP ---
-# (Почти без изменений из вашего ga_9.py)
+# --- Код из файла algelitism.py ---
+# Я вставил его прямо сюда
 
+def eaSimpleElitism(population, toolbox, cxpb, mutpb, ngen, stats=None,
+             halloffame=None, verbose=__debug__, callback=None):
+    """Переделанный алгоритм eaSimple с элементом элитизма
+    """
+
+    logbook = tools.Logbook()
+    logbook.header = ['gen', 'nevals'] + (stats.fields if stats else [])
+
+    # Evaluate the individuals with an invalid fitness
+    invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
+
+    if halloffame is not None:
+        halloffame.update(population)
+
+    hof_size = len(halloffame.items) if halloffame.items else 0
+
+    record = stats.compile(population) if stats else {}
+    logbook.record(gen=0, nevals=len(invalid_ind), **record)
+    if verbose:
+        print(logbook.stream)
+
+    # Begin the generational process
+    for gen in range(1, ngen + 1):
+        # Select the next generation individuals
+        offspring = toolbox.select(population, len(population) - hof_size)
+
+        # Vary the pool of individuals
+        offspring = varAnd(offspring, toolbox, cxpb, mutpb)
+
+        # Evaluate the individuals with an invalid fitness
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+        fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+        for ind, fit in zip(invalid_ind, fitnesses):
+            ind.fitness.values = fit
+
+        offspring.extend(halloffame.items)
+
+        # Update the hall of fame with the generated individuals
+        if halloffame is not None:
+            halloffame.update(offspring)
+
+        # Replace the current population by the offspring
+        population[:] = offspring
+
+        # Append the current generation statistics to the logbook
+        record = stats.compile(population) if stats else {}
+        logbook.record(gen=gen, nevals=len(invalid_ind), **record)
+        if verbose:
+            print(logbook.stream)
+
+        if callback:
+            callback[0](*callback[1])
+
+    return population, logbook
+
+# --- Конец кода из algelitism.py ---
+
+
+# --- Константы и Настройка DEAP ---
 LOW, UP = -5, 5
 ETA = 20
 LENGTH_CHROM = 2
@@ -33,9 +93,6 @@ def himmelblau(individual):
 
 # --- Функции для Streamlit ---
 
-# @st.cache_data кеширует результат.
-# Это значит, что GA не будет перезапускаться каждый раз,
-# когда вы двигаете ползунок "Поколение".
 @st.cache_data
 def run_ga(pop_size, max_gen, cxpb, mutpb):
     """
@@ -57,24 +114,21 @@ def run_ga(pop_size, max_gen, cxpb, mutpb):
     stats.register("min", np.min)
     stats.register("avg", np.mean)
 
-    # --- Ключевое изменение ---
-    # Мы будем сохранять историю популяций здесь
     population_history = []
     
-    # Кастомная callback-функция для сохранения истории
     def record_history(population, *args):
-        population_history.append(population[:]) # Важно: сохранить копию
+        population_history.append(population[:])
 
-    # Запускаем GA с нашим колбэком
-    pop, logbook = algelitism.eaSimpleElitism(population, toolbox,
-                                            cxpb=cxpb,
-                                            mutpb=mutpb,
-                                            ngen=max_gen,
-                                            halloffame=hof,
-                                            stats=stats,
-                                            # Передаем нашу функцию
-                                            callback=(record_history, ()), 
-                                            verbose=False) # Отключаем print в консоль
+    # --- КЛЮЧЕВОЕ ИЗМЕНЕНИЕ ---
+    # Мы убрали 'algelitism.' и теперь вызываем функцию напрямую
+    pop, logbook = eaSimpleElitism(population, toolbox,
+                                    cxpb=cxpb,
+                                    mutpb=mutpb,
+                                    ngen=max_gen,
+                                    halloffame=hof,
+                                    stats=stats,
+                                    callback=(record_history, ()), 
+                                    verbose=False)
 
     return logbook, population_history, hof
 
@@ -88,7 +142,6 @@ def plot_population(population, generation_num, xgrid, ygrid, f_himmelbalu, ax):
     ax.contour(xgrid, ygrid, f_himmelbalu, levels=20)
     ax.scatter(*zip(*ptMins), marker='X', color='red', zorder=2, s=150, label="Истинные минимумы")
     
-    # Разделяем популяцию на X и Y
     pop_x = [ind[0] for ind in population]
     pop_y = [ind[1] for ind in population]
     ax.scatter(pop_x, pop_y, color='green', s=10, zorder=1, alpha=0.7, label="Популяция")
@@ -133,8 +186,6 @@ if st.sidebar.button("🚀 Запустить оптимизацию"):
     with st.spinner("Алгоритм выполняется..."):
         logbook, history, hof = run_ga(POPULATION_SIZE, MAX_GENERATIONS, P_CROSSOVER, P_MUTATION)
         
-        # Сохраняем результаты в 'session_state'
-        # чтобы они не пропали при движении другого ползунка
         st.session_state.logbook = logbook
         st.session_state.history = history
         st.session_state.hof = hof
@@ -145,7 +196,6 @@ if st.sidebar.button("🚀 Запустить оптимизацию"):
 if 'run_completed' in st.session_state:
     st.header("Результаты оптимизации")
 
-    # Подготовка данных для графика (делаем 1 раз)
     if 'xgrid' not in st.session_state:
         x = np.arange(LOW-1, UP+1, 0.1)
         y = np.arange(LOW-1, UP+1, 0.1)
@@ -153,15 +203,11 @@ if 'run_completed' in st.session_state:
         st.session_state.f_himmelbalu = (st.session_state.xgrid**2 + st.session_state.ygrid - 11)**2 + \
                                        (st.session_state.xgrid + st.session_state.ygrid**2 - 7)**2
 
-    # --- 3.1. Интерактивный ползунок поколений ---
     st.subheader("Эволюция популяции")
-    
     history = st.session_state.history
     
-    # Ползунок для выбора поколения
     gen_to_show = st.slider("Выберите поколение для отображения:", 0, len(history) - 1, 0)
     
-    # Создаем холст для графика
     fig_pop, ax_pop = plt.subplots(figsize=(7, 7))
     plot_population(history[gen_to_show], 
                     gen_to_show, 
@@ -170,17 +216,15 @@ if 'run_completed' in st.session_state:
                     st.session_state.f_himmelbalu,
                     ax_pop)
     
-    # --- 3.2. Вывод графиков и результатов ---
-    
-    col1, col2 = st.columns([1.5, 1]) # Делим экран на 2 колонки
+    col1, col2 = st.columns([1.5, 1])
     
     with col1:
-        st.pyplot(fig_pop) # График с популяцией
+        st.pyplot(fig_pop)
     
     with col2:
         st.subheader("График сходимости")
         fig_conv = plot_convergence(st.session_state.logbook)
-        st.pyplot(fig_conv) # График сходимости
+        st.pyplot(fig_conv)
         
         st.subheader("Лучшее найденное решение")
         best_ind = st.session_state.hof.items[0]
